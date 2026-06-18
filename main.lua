@@ -1,6 +1,6 @@
 -- ============================================================
--- FH-cxh UI Library
--- Dark Theme + iOS Liquid Glass Theme
+-- FH-cxh Liquid Glass UI
+-- iOS 26 Liquid Glass 风格 - 纯液态玻璃主题
 -- ============================================================
 
 local FH_cxh = {};
@@ -14,43 +14,25 @@ local RunService = game:GetService("RunService");
 local LocalPlayer = Players.LocalPlayer;
 
 local DNABackground = loadstring(game:HttpGet("https://raw.githubusercontent.com/GGG792/FH-cxh/main/modules/DNABackground.lua"))();
-local RainbowBorder = loadstring(game:HttpGet("https://raw.githubusercontent.com/GGG792/FH-cxh/main/modules/RainbowBorder.lua"))();
-
-local THEME = {
-	Background = Color3.fromRGB(15, 15, 25);
-	Card = Color3.fromRGB(25, 25, 40);
-	CardHover = Color3.fromRGB(35, 35, 55);
-	Text = Color3.fromRGB(240, 240, 255);
-	TextDim = Color3.fromRGB(150, 150, 180);
-	Accent = Color3.fromRGB(100, 200, 255);
-	CornerRadius = UDim.new(0, 16);
-	WindowSize = {Width = 520, Height = 340};
-};
 
 -- ========== 创建窗口 ==========
 function FH_cxh.new(config)
 	config = config or {};
 	local self = setmetatable({}, FH_cxh);
 	self.Name = config.Name or "FH-cxh";
-	self.Theme = {};
-	for k, v in pairs(THEME) do self.Theme[k] = v; end;
-	if config.Theme then
-		for k, v in pairs(config.Theme) do self.Theme[k] = v; end;
-	end;
-
-	self.CurrentTheme = "dark";
 	self.Tabs = {};
 	self.ActiveTab = nil;
-	self.IsGlass = false;
 	self.GlassElements = {};
+	self.Connections = {};
 
 	self:_createWindow();
 	self:_createDNA();
-	self:_createBorder();
+	self:_createGlassBorder();
 	self:_createTitleBar();
 	self:_createSidebar();
 	self:_createContentArea();
 	self:_makeDraggable();
+	self:_startGlassAnimation();
 
 	return self;
 end;
@@ -63,82 +45,203 @@ function FH_cxh:_createWindow()
 	self.Gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling;
 	self.Gui.IgnoreGuiInset = true;
 
-	-- 主窗口
+	-- 主窗口 - 液态玻璃主体
 	self.Window = Instance.new("Frame");
 	self.Window.Name = "MainWindow";
-	self.Window.Size = UDim2.new(0, self.Theme.WindowSize.Width, 0, self.Theme.WindowSize.Height);
-	self.Window.Position = UDim2.new(0.5, -self.Theme.WindowSize.Width/2, 0.5, -self.Theme.WindowSize.Height/2);
-	self.Window.BackgroundColor3 = self.Theme.Background;
-	self.Window.BackgroundTransparency = 0.05;
+	self.Window.Size = UDim2.new(0, 520, 0, 340);
+	self.Window.Position = UDim2.new(0.5, -260, 0.5, -170);
+	self.Window.BackgroundColor3 = Color3.fromRGB(35, 35, 50);
+	self.Window.BackgroundTransparency = 0.25;
 	self.Window.BorderSizePixel = 0;
 	self.Window.ClipsDescendants = true;
 	self.Window.Parent = self.Gui;
-	Instance.new("UICorner", self.Window).CornerRadius = self.Theme.CornerRadius;
 
-	-- 阴影
-	local shadow = Instance.new("ImageLabel");
-	shadow.Size = UDim2.new(1, 50, 1, 50);
-	shadow.Position = UDim2.new(0, -25, 0, -25);
-	shadow.BackgroundTransparency = 1;
-	shadow.Image = "rbxassetid://5554236805";
-	shadow.ImageColor3 = Color3.fromRGB(0, 0, 0);
-	shadow.ImageTransparency = 0.5;
-	shadow.ScaleType = Enum.ScaleType.Slice;
-	shadow.SliceCenter = Rect.new(23, 23, 277, 277);
-	shadow.ZIndex = -1;
-	shadow.Parent = self.Window;
+	-- 大圆角
+	local corner = Instance.new("UICorner");
+	corner.CornerRadius = UDim.new(0, 24);
+	corner.Parent = self.Window;
+
+	-- 全局模糊
+	self.GlassBlur = Instance.new("BlurEffect");
+	self.GlassBlur.Size = 20;
+	self.GlassBlur.Parent = Lighting;
+
+	-- 内层光泽（模拟光线折射）
+	self.InnerGlow = Instance.new("Frame");
+	self.InnerGlow.Name = "InnerGlow";
+	self.InnerGlow.Size = UDim2.new(1, 0, 0.6, 0);
+	self.InnerGlow.Position = UDim2.new(0, 0, 0, 0);
+	self.InnerGlow.BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+	self.InnerGlow.BackgroundTransparency = 0.94;
+	self.InnerGlow.BorderSizePixel = 0;
+	self.InnerGlow.ZIndex = 1;
+	self.InnerGlow.Parent = self.Window;
+	Instance.new("UICorner", self.InnerGlow).CornerRadius = UDim.new(0, 24);
+
+	-- 顶部高光（iOS 标志性顶部反光）
+	self.TopHighlight = Instance.new("Frame");
+	self.TopHighlight.Name = "TopHighlight";
+	self.TopHighlight.Size = UDim2.new(0.6, 0, 0, 2);
+	self.TopHighlight.Position = UDim2.new(0.2, 0, 0, 1);
+	self.TopHighlight.BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+	self.TopHighlight.BackgroundTransparency = 0.5;
+	self.TopHighlight.BorderSizePixel = 0;
+	self.TopHighlight.ZIndex = 2;
+	self.TopHighlight.Parent = self.Window;
+	Instance.new("UICorner", self.TopHighlight).CornerRadius = UDim.new(0, 1);
+
+	-- 底部微光
+	self.BottomGlow = Instance.new("Frame");
+	self.BottomGlow.Name = "BottomGlow";
+	self.BottomGlow.Size = UDim2.new(1, 0, 0.3, 0);
+	self.BottomGlow.Position = UDim2.new(0, 0, 0.7, 0);
+	self.BottomGlow.BackgroundColor3 = Color3.fromRGB(100, 150, 255);
+	self.BottomGlow.BackgroundTransparency = 0.97;
+	self.BottomGlow.BorderSizePixel = 0;
+	self.BottomGlow.ZIndex = 1;
+	self.BottomGlow.Parent = self.Window;
+	Instance.new("UICorner", self.BottomGlow).CornerRadius = UDim.new(0, 24);
+
+	-- 外发光（玻璃边缘折射）
+	self.OuterGlow = Instance.new("ImageLabel");
+	self.OuterGlow.Name = "OuterGlow";
+	self.OuterGlow.Size = UDim2.new(1, 20, 1, 20);
+	self.OuterGlow.Position = UDim2.new(0, -10, 0, -10);
+	self.OuterGlow.BackgroundTransparency = 1;
+	self.OuterGlow.Image = "rbxassetid://5554236805";
+	self.OuterGlow.ImageColor3 = Color3.fromRGB(120, 180, 255);
+	self.OuterGlow.ImageTransparency = 0.75;
+	self.OuterGlow.ScaleType = Enum.ScaleType.Slice;
+	self.OuterGlow.SliceCenter = Rect.new(23, 23, 277, 277);
+	self.OuterGlow.ZIndex = -1;
+	self.OuterGlow.Parent = self.Window;
 end;
 
 function FH_cxh:_createDNA()
 	self.DNA = DNABackground.new(self.Window, {
 		HelixCount = 2;
-		PointsPerHelix = 20;
-		Amplitude = 60;
-		Speed = 0.8;
+		PointsPerHelix = 18;
+		Amplitude = 50;
+		Speed = 0.6;
 		TiltAngle = 25;
-		ColorA = Color3.fromRGB(0, 200, 255);
-		ColorB = Color3.fromRGB(255, 50, 200);
+		ColorA = Color3.fromRGB(100, 180, 255);
+		ColorB = Color3.fromRGB(180, 140, 255);
+		ConnectionColor = Color3.fromRGB(200, 200, 230);
+		ConnectionTransparency = 0.8;
 	});
 	self.DNA:Start();
 end;
 
-function FH_cxh:_createBorder()
-	self.Border = RainbowBorder.new(self.Window, {
-		Thickness = 3;
-		Speed = 1.2;
-		CornerRadius = self.Theme.CornerRadius;
-	});
-	self.Border:Start();
+function FH_cxh:_createGlassBorder()
+	-- 圆角炫彩边框 - 使用4个圆角Frame拼接
+	self.BorderParts = {};
+	local thickness = 3;
+	local radius = 24;
+
+	-- 上边框
+	local top = Instance.new("Frame");
+	top.Size = UDim2.new(1, -radius*2, 0, thickness);
+	top.Position = UDim2.new(0, radius, 0, 0);
+	top.BorderSizePixel = 0;
+	top.ZIndex = 100;
+	top.Parent = self.Window;
+	table.insert(self.BorderParts, top);
+
+	-- 下边框
+	local bottom = Instance.new("Frame");
+	bottom.Size = UDim2.new(1, -radius*2, 0, thickness);
+	bottom.Position = UDim2.new(0, radius, 1, -thickness);
+	bottom.BorderSizePixel = 0;
+	bottom.ZIndex = 100;
+	bottom.Parent = self.Window;
+	table.insert(self.BorderParts, bottom);
+
+	-- 左边框
+	local left = Instance.new("Frame");
+	left.Size = UDim2.new(0, thickness, 1, -radius*2);
+	left.Position = UDim2.new(0, 0, 0, radius);
+	left.BorderSizePixel = 0;
+	left.ZIndex = 100;
+	left.Parent = self.Window;
+	table.insert(self.BorderParts, left);
+
+	-- 右边框
+	local right = Instance.new("Frame");
+	right.Size = UDim2.new(0, thickness, 1, -radius*2);
+	right.Position = UDim2.new(1, -thickness, 0, radius);
+	right.BorderSizePixel = 0;
+	right.ZIndex = 100;
+	right.Parent = self.Window;
+	table.insert(self.BorderParts, right);
+
+	-- 左上角圆弧
+	local tl = Instance.new("Frame");
+	tl.Size = UDim2.new(0, radius, 0, radius);
+	tl.Position = UDim2.new(0, 0, 0, 0);
+	tl.BorderSizePixel = 0;
+	tl.ZIndex = 100;
+	tl.Parent = self.Window;
+	table.insert(self.BorderParts, tl);
+
+	-- 右上角圆弧
+	local tr = Instance.new("Frame");
+	tr.Size = UDim2.new(0, radius, 0, radius);
+	tr.Position = UDim2.new(1, -radius, 0, 0);
+	tr.BorderSizePixel = 0;
+	tr.ZIndex = 100;
+	tr.Parent = self.Window;
+	table.insert(self.BorderParts, tr);
+
+	-- 左下角圆弧
+	local bl = Instance.new("Frame");
+	bl.Size = UDim2.new(0, radius, 0, radius);
+	bl.Position = UDim2.new(0, 0, 1, -radius);
+	bl.BorderSizePixel = 0;
+	bl.ZIndex = 100;
+	bl.Parent = self.Window;
+	table.insert(self.BorderParts, bl);
+
+	-- 右下角圆弧
+	local br = Instance.new("Frame");
+	br.Size = UDim2.new(0, radius, 0, radius);
+	br.Position = UDim2.new(1, -radius, 1, -radius);
+	br.BorderSizePixel = 0;
+	br.ZIndex = 100;
+	br.Parent = self.Window;
+	table.insert(self.BorderParts, br);
 end;
 
 function FH_cxh:_createTitleBar()
 	self.TitleBar = Instance.new("Frame");
 	self.TitleBar.Name = "TitleBar";
-	self.TitleBar.Size = UDim2.new(1, 0, 0, 38);
-	self.TitleBar.BackgroundColor3 = Color3.fromRGB(20, 20, 35);
-	self.TitleBar.BackgroundTransparency = 0.3;
+	self.TitleBar.Size = UDim2.new(1, -12, 0, 38);
+	self.TitleBar.Position = UDim2.new(0, 6, 0, 6);
+	self.TitleBar.BackgroundColor3 = Color3.fromRGB(50, 50, 70);
+	self.TitleBar.BackgroundTransparency = 0.4;
 	self.TitleBar.BorderSizePixel = 0;
 	self.TitleBar.ZIndex = 10;
 	self.TitleBar.Parent = self.Window;
 	Instance.new("UICorner", self.TitleBar).CornerRadius = UDim.new(0, 16);
 
-	-- 底部线
-	local line = Instance.new("Frame");
-	line.Size = UDim2.new(1, 0, 0, 1);
-	line.Position = UDim2.new(0, 0, 1, -1);
-	line.BackgroundColor3 = Color3.fromRGB(80, 80, 120);
-	line.BackgroundTransparency = 0.5;
-	line.BorderSizePixel = 0;
-	line.ZIndex = 10;
-	line.Parent = self.TitleBar;
+	-- 标题栏内发光
+	local titleGlow = Instance.new("Frame");
+	titleGlow.Size = UDim2.new(1, -4, 0.5, 0);
+	titleGlow.Position = UDim2.new(0, 2, 0, 1);
+	titleGlow.BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+	titleGlow.BackgroundTransparency = 0.92;
+	titleGlow.BorderSizePixel = 0;
+	titleGlow.ZIndex = 11;
+	titleGlow.Parent = self.TitleBar;
+	Instance.new("UICorner", titleGlow).CornerRadius = UDim.new(0, 14);
 
 	-- Logo
 	local logo = Instance.new("Frame");
-	logo.Size = UDim2.new(0, 24, 0, 24);
-	logo.Position = UDim2.new(0, 10, 0, 7);
-	logo.BackgroundColor3 = self.Theme.Accent;
+	logo.Size = UDim2.new(0, 22, 0, 22);
+	logo.Position = UDim2.new(0, 10, 0, 8);
+	logo.BackgroundColor3 = Color3.fromRGB(100, 180, 255);
+	logo.BackgroundTransparency = 0.3;
 	logo.BorderSizePixel = 0;
-	logo.ZIndex = 11;
+	logo.ZIndex = 12;
 	logo.Parent = self.TitleBar;
 	Instance.new("UICorner", logo).CornerRadius = UDim.new(0, 7);
 
@@ -147,133 +250,115 @@ function FH_cxh:_createTitleBar()
 	logoText.BackgroundTransparency = 1;
 	logoText.Text = "FH";
 	logoText.Font = Enum.Font.SourceSansBold;
-	logoText.TextSize = 13;
+	logoText.TextSize = 12;
 	logoText.TextColor3 = Color3.fromRGB(255, 255, 255);
-	logoText.ZIndex = 12;
+	logoText.ZIndex = 13;
 	logoText.Parent = logo;
 
 	-- 标题
 	self.TitleLabel = Instance.new("TextLabel");
-	self.TitleLabel.Size = UDim2.new(0, 160, 1, 0);
-	self.TitleLabel.Position = UDim2.new(0, 40, 0, 0);
+	self.TitleLabel.Size = UDim2.new(0, 150, 1, 0);
+	self.TitleLabel.Position = UDim2.new(0, 38, 0, 0);
 	self.TitleLabel.BackgroundTransparency = 1;
 	self.TitleLabel.Text = self.Name;
 	self.TitleLabel.Font = Enum.Font.SourceSansBold;
-	self.TitleLabel.TextSize = 15;
-	self.TitleLabel.TextColor3 = self.Theme.Text;
+	self.TitleLabel.TextSize = 14;
+	self.TitleLabel.TextColor3 = Color3.fromRGB(255, 255, 255);
+	self.TitleLabel.TextTransparency = 0.15;
 	self.TitleLabel.TextXAlignment = Enum.TextXAlignment.Left;
-	self.TitleLabel.ZIndex = 11;
+	self.TitleLabel.ZIndex = 12;
 	self.TitleLabel.Parent = self.TitleBar;
 
-	-- 液态玻璃切换按钮
-	local glassBtn = Instance.new("TextButton");
-	glassBtn.Size = UDim2.new(0, 28, 0, 28);
-	glassBtn.Position = UDim2.new(1, -116, 0, 5);
-	glassBtn.BackgroundColor3 = Color3.fromRGB(100, 200, 255);
-	glassBtn.BackgroundTransparency = 0.3;
-	glassBtn.Text = "G";
-	glassBtn.Font = Enum.Font.SourceSansBold;
-	glassBtn.TextSize = 12;
-	glassBtn.TextColor3 = Color3.fromRGB(255, 255, 255);
-	glassBtn.ZIndex = 11;
-	glassBtn.Parent = self.TitleBar;
-	Instance.new("UICorner", glassBtn).CornerRadius = UDim.new(0, 7);
-
-	glassBtn.MouseEnter:Connect(function()
-		TweenService:Create(glassBtn, TweenInfo.new(0.2), {BackgroundTransparency=0}):Play();
-	end);
-	glassBtn.MouseLeave:Connect(function()
-		TweenService:Create(glassBtn, TweenInfo.new(0.2), {BackgroundTransparency=0.3}):Play();
-	end);
-	glassBtn.MouseButton1Click:Connect(function()
-		self:SwitchTheme();
-	end);
-
-	-- 最小化
-	local minBtn = Instance.new("TextButton");
-	minBtn.Size = UDim2.new(0, 28, 0, 28);
-	minBtn.Position = UDim2.new(1, -82, 0, 5);
-	minBtn.BackgroundColor3 = Color3.fromRGB(255, 170, 0);
-	minBtn.BackgroundTransparency = 0.3;
-	minBtn.Text = "-";
-	minBtn.Font = Enum.Font.SourceSansBold;
-	minBtn.TextSize = 16;
-	minBtn.TextColor3 = Color3.fromRGB(255, 255, 255);
-	minBtn.ZIndex = 11;
-	minBtn.Parent = self.TitleBar;
-	Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 7);
-	minBtn.MouseEnter:Connect(function() TweenService:Create(minBtn, TweenInfo.new(0.2), {BackgroundTransparency=0}):Play(); end);
-	minBtn.MouseLeave:Connect(function() TweenService:Create(minBtn, TweenInfo.new(0.2), {BackgroundTransparency=0.3}):Play(); end);
-
-	-- 关闭
+	-- 关闭按钮
 	local closeBtn = Instance.new("TextButton");
-	closeBtn.Size = UDim2.new(0, 28, 0, 28);
-	closeBtn.Position = UDim2.new(1, -48, 0, 5);
-	closeBtn.BackgroundColor3 = Color3.fromRGB(255, 71, 87);
-	closeBtn.BackgroundTransparency = 0.3;
-	closeBtn.Text = "X";
-	closeBtn.Font = Enum.Font.SourceSansBold;
-	closeBtn.TextSize = 12;
-	closeBtn.TextColor3 = Color3.fromRGB(255, 255, 255);
-	closeBtn.ZIndex = 11;
+	closeBtn.Size = UDim2.new(0, 26, 0, 26);
+	closeBtn.Position = UDim2.new(1, -36, 0, 6);
+	closeBtn.BackgroundColor3 = Color3.fromRGB(255, 80, 80);
+	closeBtn.BackgroundTransparency = 0.4;
+	closeBtn.Text = "";
+	closeBtn.BorderSizePixel = 0;
+	closeBtn.ZIndex = 12;
 	closeBtn.Parent = self.TitleBar;
-	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 7);
-	closeBtn.MouseEnter:Connect(function() TweenService:Create(closeBtn, TweenInfo.new(0.2), {BackgroundTransparency=0}):Play(); end);
-	closeBtn.MouseLeave:Connect(function() TweenService:Create(closeBtn, TweenInfo.new(0.2), {BackgroundTransparency=0.3}):Play(); end);
-	closeBtn.MouseButton1Click:Connect(function() self:Destroy(); end);
+	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 8);
+
+	-- 关闭按钮内发光
+	local closeGlow = Instance.new("Frame");
+	closeGlow.Size = UDim2.new(1, -4, 0.5, 0);
+	closeGlow.Position = UDim2.new(0, 2, 0, 1);
+	closeGlow.BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+	closeGlow.BackgroundTransparency = 0.85;
+	closeGlow.BorderSizePixel = 0;
+	closeGlow.ZIndex = 13;
+	closeGlow.Parent = closeBtn;
+	Instance.new("UICorner", closeGlow).CornerRadius = UDim.new(0, 6);
+
+	closeBtn.MouseEnter:Connect(function()
+		TweenService:Create(closeBtn, TweenInfo.new(0.2), {BackgroundTransparency=0.15}):Play();
+	end);
+	closeBtn.MouseLeave:Connect(function()
+		TweenService:Create(closeBtn, TweenInfo.new(0.2), {BackgroundTransparency=0.4}):Play();
+	end);
+	closeBtn.MouseButton1Click:Connect(function()
+		self:Destroy();
+	end);
 end;
 
 function FH_cxh:_createSidebar()
 	self.Sidebar = Instance.new("Frame");
 	self.Sidebar.Name = "Sidebar";
-	self.Sidebar.Size = UDim2.new(0, 130, 1, -38);
-	self.Sidebar.Position = UDim2.new(0, 0, 0, 38);
-	self.Sidebar.BackgroundColor3 = Color3.fromRGB(20, 20, 35);
-	self.Sidebar.BackgroundTransparency = 0.5;
+	self.Sidebar.Size = UDim2.new(0, 120, 1, -56);
+	self.Sidebar.Position = UDim2.new(0, 6, 0, 50);
+	self.Sidebar.BackgroundColor3 = Color3.fromRGB(45, 45, 65);
+	self.Sidebar.BackgroundTransparency = 0.45;
 	self.Sidebar.BorderSizePixel = 0;
 	self.Sidebar.ZIndex = 5;
 	self.Sidebar.Parent = self.Window;
+	Instance.new("UICorner", self.Sidebar).CornerRadius = UDim.new(0, 14);
 
-	local line = Instance.new("Frame");
-	line.Size = UDim2.new(0, 1, 1, 0);
-	line.Position = UDim2.new(1, -1, 0, 0);
-	line.BackgroundColor3 = Color3.fromRGB(80, 80, 120);
-	line.BackgroundTransparency = 0.5;
-	line.BorderSizePixel = 0;
-	line.ZIndex = 5;
-	line.Parent = self.Sidebar;
+	-- 侧边栏内发光
+	local sideGlow = Instance.new("Frame");
+	sideGlow.Size = UDim2.new(1, -4, 0.4, 0);
+	sideGlow.Position = UDim2.new(0, 2, 0, 1);
+	sideGlow.BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+	sideGlow.BackgroundTransparency = 0.94;
+	sideGlow.BorderSizePixel = 0;
+	sideGlow.ZIndex = 6;
+	sideGlow.Parent = self.Sidebar;
+	Instance.new("UICorner", sideGlow).CornerRadius = UDim.new(0, 12);
 end;
 
 function FH_cxh:_createContentArea()
 	self.Content = Instance.new("Frame");
 	self.Content.Name = "Content";
-	self.Content.Size = UDim2.new(1, -130, 1, -38);
-	self.Content.Position = UDim2.new(0, 130, 0, 38);
+	self.Content.Size = UDim2.new(1, -138, 1, -56);
+	self.Content.Position = UDim2.new(0, 132, 0, 50);
 	self.Content.BackgroundTransparency = 1;
 	self.Content.BorderSizePixel = 0;
 	self.Content.ZIndex = 5;
 	self.Content.Parent = self.Window;
 
 	local welcome = Instance.new("TextLabel");
-	welcome.Size = UDim2.new(1, -30, 0, 32);
-	welcome.Position = UDim2.new(0, 15, 0, 15);
+	welcome.Size = UDim2.new(1, -20, 0, 28);
+	welcome.Position = UDim2.new(0, 10, 0, 12);
 	welcome.BackgroundTransparency = 1;
-	welcome.Text = "Welcome to " .. self.Name;
+	welcome.Text = "Welcome";
 	welcome.Font = Enum.Font.SourceSansBold;
-	welcome.TextSize = 20;
-	welcome.TextColor3 = self.Theme.Text;
+	welcome.TextSize = 18;
+	welcome.TextColor3 = Color3.fromRGB(255, 255, 255);
+	welcome.TextTransparency = 0.2;
 	welcome.TextXAlignment = Enum.TextXAlignment.Left;
 	welcome.ZIndex = 6;
 	welcome.Parent = self.Content;
 
 	local sub = Instance.new("TextLabel");
-	sub.Size = UDim2.new(1, -30, 0, 16);
-	sub.Position = UDim2.new(0, 15, 0, 48);
+	sub.Size = UDim2.new(1, -20, 0, 14);
+	sub.Position = UDim2.new(0, 10, 0, 40);
 	sub.BackgroundTransparency = 1;
-	sub.Text = "Select a tab to get started."
+	sub.Text = "Select a tab";
 	sub.Font = Enum.Font.SourceSans;
 	sub.TextSize = 12;
-	sub.TextColor3 = self.Theme.TextDim;
+	sub.TextColor3 = Color3.fromRGB(200, 200, 230);
+	sub.TextTransparency = 0.3;
 	sub.TextXAlignment = Enum.TextXAlignment.Left;
 	sub.ZIndex = 6;
 	sub.Parent = self.Content;
@@ -308,21 +393,101 @@ function FH_cxh:_makeDraggable()
 	end);
 end;
 
+-- ========== 炫彩边框动画 ==========
+function FH_cxh:_startGlassAnimation()
+	-- 炫彩边框颜色循环
+	local conn = RunService.RenderStepped:Connect(function()
+		local t = tick() * 1.5;
+		for i, part in ipairs(self.BorderParts) do
+			local hue = ((t + i * 0.125) % 1);
+			local color = Color3.fromHSV(hue, 0.7, 1);
+			part.BackgroundColor3 = color;
+			part.BackgroundTransparency = 0.15 + math.sin(t * 2 + i) * 0.1;
+		end;
+
+		-- 内层光泽呼吸
+		if self.InnerGlow then
+			self.InnerGlow.BackgroundTransparency = 0.92 + math.sin(t * 0.8) * 0.04;
+		end;
+
+		-- 底部微光呼吸
+		if self.BottomGlow then
+			self.BottomGlow.BackgroundTransparency = 0.96 + math.sin(t * 0.6 + 1) * 0.02;
+		end;
+
+		-- 外发光颜色变化
+		if self.OuterGlow then
+			local outerHue = (t * 0.3) % 1;
+			self.OuterGlow.ImageColor3 = Color3.fromHSV(outerHue, 0.4, 1);
+			self.OuterGlow.ImageTransparency = 0.7 + math.sin(t) * 0.1;
+		end;
+
+		-- 顶部高光闪烁
+		if self.TopHighlight then
+			self.TopHighlight.BackgroundTransparency = 0.45 + math.sin(t * 1.5) * 0.15;
+		end;
+	end);
+	table.insert(self.Connections, conn);
+
+	-- 鼠标移动时的光线反射
+	local reflectConn = UserInputService.InputChanged:Connect(function(input)
+		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
+			pcall(function()
+				local pos = input.Position;
+				local absPos = self.Window.AbsolutePosition;
+				local absSize = self.Window.AbsoluteSize;
+				local relX = math.clamp((pos.X - absPos.X) / absSize.X, 0, 1);
+				local relY = math.clamp((pos.Y - absPos.Y) / absSize.Y, 0, 1);
+
+				-- 内层光泽随鼠标移动
+				if self.InnerGlow then
+					self.InnerGlow.Size = UDim2.new(1, 0, 0.4 + relY * 0.3, 0);
+					self.InnerGlow.BackgroundTransparency = 0.9 + relY * 0.08;
+				end;
+
+				-- 顶部高光跟随
+				if self.TopHighlight then
+					self.TopHighlight.Position = UDim2.new(0.15 + relX * 0.1, 0, 0, 1);
+					self.TopHighlight.Size = UDim2.new(0.5 + relX * 0.15, 0, 0, 2);
+				end;
+
+				-- 外发光颜色微调
+				if self.OuterGlow then
+					local hue = relX * 0.2;
+					self.OuterGlow.ImageColor3 = Color3.fromHSV(hue, 0.35, 1);
+				end;
+			end);
+		end;
+	end);
+	table.insert(self.Connections, reflectConn);
+end;
+
 -- ========== 标签页 ==========
 function FH_cxh:AddTab(name, icon)
 	local tabBtn = Instance.new("TextButton");
-	tabBtn.Size = UDim2.new(1, -12, 0, 32);
-	tabBtn.Position = UDim2.new(0, 6, 0, 6 + (#self.Tabs * 38));
-	tabBtn.BackgroundColor3 = self.Theme.Card;
-	tabBtn.BackgroundTransparency = 0.3;
+	tabBtn.Size = UDim2.new(1, -10, 0, 30);
+	tabBtn.Position = UDim2.new(0, 5, 0, 6 + (#self.Tabs * 36));
+	tabBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 85);
+	tabBtn.BackgroundTransparency = 0.5;
 	tabBtn.Text = "  " .. (icon or "") .. " " .. name;
 	tabBtn.Font = Enum.Font.SourceSansBold;
 	tabBtn.TextSize = 12;
-	tabBtn.TextColor3 = self.Theme.TextDim;
+	tabBtn.TextColor3 = Color3.fromRGB(200, 200, 220);
 	tabBtn.TextXAlignment = Enum.TextXAlignment.Left;
-	tabBtn.ZIndex = 6;
+	tabBtn.ZIndex = 7;
 	tabBtn.Parent = self.Sidebar;
-	Instance.new("UICorner", tabBtn).CornerRadius = UDim.new(0, 8);
+	Instance.new("UICorner", tabBtn).CornerRadius = UDim.new(0, 10);
+
+	-- 按钮内发光
+	local btnGlow = Instance.new("Frame");
+	btnGlow.Size = UDim2.new(1, -4, 0.5, 0);
+	btnGlow.Position = UDim2.new(0, 2, 0, 1);
+	btnGlow.BackgroundColor3 = Color3.fromRGB(255, 255, 255);
+	btnGlow.BackgroundTransparency = 0.93;
+	btnGlow.BorderSizePixel = 0;
+	btnGlow.ZIndex = 8;
+	btnGlow.Parent = tabBtn;
+	Instance.new("UICorner", btnGlow).CornerRadius = UDim.new(0, 8);
 
 	local tabContent = Instance.new("Frame");
 	tabContent.Size = UDim2.new(1, 0, 1, 0);
@@ -331,19 +496,31 @@ function FH_cxh:AddTab(name, icon)
 	tabContent.ZIndex = 6;
 	tabContent.Parent = self.Content;
 
-	local tab = {Button = tabBtn; Content = tabContent; Name = name};
+	local tab = {Button = tabBtn; Content = tabContent; Name = name; Glow = btnGlow};
 
 	tabBtn.MouseEnter:Connect(function()
 		if self.ActiveTab ~= tab then
-			TweenService:Create(tabBtn, TweenInfo.new(0.2), {BackgroundColor3=self.Theme.CardHover, TextColor3=self.Theme.Text}):Play();
+			TweenService:Create(tabBtn, TweenInfo.new(0.2), {
+				BackgroundColor3 = Color3.fromRGB(80, 80, 110),
+				BackgroundTransparency = 0.35
+			}):Play();
+			TweenService:Create(btnGlow, TweenInfo.new(0.2), {BackgroundTransparency=0.88}):Play();
 		end;
 	end);
+
 	tabBtn.MouseLeave:Connect(function()
 		if self.ActiveTab ~= tab then
-			TweenService:Create(tabBtn, TweenInfo.new(0.2), {BackgroundColor3=self.Theme.Card, TextColor3=self.Theme.TextDim}):Play();
+			TweenService:Create(tabBtn, TweenInfo.new(0.2), {
+				BackgroundColor3 = Color3.fromRGB(60, 60, 85),
+				BackgroundTransparency = 0.5
+			}):Play();
+			TweenService:Create(btnGlow, TweenInfo.new(0.2), {BackgroundTransparency=0.93}):Play();
 		end;
 	end);
-	tabBtn.MouseButton1Click:Connect(function() self:SelectTab(tab); end);
+
+	tabBtn.MouseButton1Click:Connect(function()
+		self:SelectTab(tab);
+	end);
 
 	table.insert(self.Tabs, tab);
 	if #self.Tabs == 1 then self:SelectTab(tab); end;
@@ -353,349 +530,31 @@ end;
 function FH_cxh:SelectTab(tab)
 	for _, t in ipairs(self.Tabs) do
 		t.Content.Visible = false;
-		TweenService:Create(t.Button, TweenInfo.new(0.2), {BackgroundColor3=self.Theme.Card, TextColor3=self.Theme.TextDim}):Play();
-	end;
-	tab.Content.Visible = true;
-	TweenService:Create(tab.Button, TweenInfo.new(0.2), {BackgroundColor3=self.Theme.Accent, TextColor3=Color3.fromRGB(255,255,255)}):Play();
-	self.ActiveTab = tab;
-end;
-
--- ============================================================
--- iOS Liquid Glass 主题
--- ============================================================
-function FH_cxh:SwitchTheme()
-	if self.CurrentTheme == "dark" then
-		self:_applyLiquidGlass();
-	else
-		self:_applyDarkTheme();
-	end;
-end;
-
-function FH_cxh:_applyLiquidGlass()
-	self.CurrentTheme = "glass";
-	self.IsGlass = true;
-
-	-- ===== 全局模糊 =====
-	if not self.GlassBlur then
-		self.GlassBlur = Instance.new("BlurEffect");
-		self.GlassBlur.Size = 0;
-		self.GlassBlur.Parent = Lighting;
-	end;
-	TweenService:Create(self.GlassBlur, TweenInfo.new(0.6, Enum.EasingStyle.Quad), {Size=24}):Play();
-
-	-- ===== 窗口：液态玻璃主体 =====
-	-- 深色半透明底（模拟 iOS 深色模式下的玻璃）
-	TweenService:Create(self.Window, TweenInfo.new(0.6, Enum.EasingStyle.Quad), {
-		BackgroundColor3 = Color3.fromRGB(30, 30, 40),
-		BackgroundTransparency = 0.15
-	}):Play();
-
-	-- 内层玻璃光泽（模拟光线折射）
-	local innerGlow = Instance.new("Frame");
-	innerGlow.Name = "GlassInnerGlow";
-	innerGlow.Size = UDim2.new(1, 0, 0.5, 0);
-	innerGlow.Position = UDim2.new(0, 0, 0, 0);
-	innerGlow.BackgroundColor3 = Color3.fromRGB(255, 255, 255);
-	innerGlow.BackgroundTransparency = 0.95;
-	innerGlow.BorderSizePixel = 0;
-	innerGlow.ZIndex = 1;
-	innerGlow.Parent = self.Window;
-	Instance.new("UICorner", innerGlow).CornerRadius = UDim.new(0, 16);
-	table.insert(self.GlassElements, innerGlow);
-
-	-- 顶部高光条（iOS Liquid Glass 标志性顶部反光）
-	local topHighlight = Instance.new("Frame");
-	topHighlight.Name = "GlassTopHighlight";
-	topHighlight.Size = UDim2.new(0.7, 0, 0, 1);
-	topHighlight.Position = UDim2.new(0.15, 0, 0, 0);
-	topHighlight.BackgroundColor3 = Color3.fromRGB(255, 255, 255);
-	topHighlight.BackgroundTransparency = 0.6;
-	topHighlight.BorderSizePixel = 0;
-	topHighlight.ZIndex = 2;
-	topHighlight.Parent = self.Window;
-	Instance.new("UICorner", topHighlight).CornerRadius = UDim.new(0, 16);
-	table.insert(self.GlassElements, topHighlight);
-
-	-- 边缘光晕（模拟玻璃边缘折射）
-	local edgeGlow = Instance.new("ImageLabel");
-	edgeGlow.Name = "GlassEdgeGlow";
-	edgeGlow.Size = UDim2.new(1, 4, 1, 4);
-	edgeGlow.Position = UDim2.new(0, -2, 0, -2);
-	edgeGlow.BackgroundTransparency = 1;
-	edgeGlow.Image = "rbxassetid://5554236805";
-	edgeGlow.ImageColor3 = Color3.fromRGB(150, 200, 255);
-	edgeGlow.ImageTransparency = 0.7;
-	edgeGlow.ScaleType = Enum.ScaleType.Slice;
-	edgeGlow.SliceCenter = Rect.new(23, 23, 277, 277);
-	edgeGlow.ZIndex = 2;
-	edgeGlow.Parent = self.Window;
-	table.insert(self.GlassElements, edgeGlow);
-
-	-- ===== 动态光线反射（随设备移动变化） =====
-	local reflectConn;
-	reflectConn = UserInputService.InputChanged:Connect(function(input)
-		if not self.IsGlass then reflectConn:Disconnect(); return; end;
-		if input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch then
-			pcall(function()
-				local pos = input.Position;
-				local absPos = self.Window.AbsolutePosition;
-				local absSize = self.Window.AbsoluteSize;
-				-- 计算鼠标相对窗口的位置 (0~1)
-				local relX = math.clamp((pos.X - absPos.X) / absSize.X, 0, 1);
-				local relY = math.clamp((pos.Y - absPos.Y) / absSize.Y, 0, 1);
-
-				-- 内层光泽跟随鼠标
-				innerGlow.Position = UDim2.new(0, 0, 0, 0);
-				innerGlow.Size = UDim2.new(1, 0, 0.3 + relY * 0.4, 0);
-				innerGlow.BackgroundTransparency = 0.92 + relY * 0.06;
-
-				-- 边缘光晕颜色随位置变化
-				local hue = relX * 0.15;
-				edgeGlow.ImageColor3 = Color3.fromHSV(hue, 0.3, 1);
-				edgeGlow.ImageTransparency = 0.65 + relY * 0.15;
-
-				-- 顶部高光位置微调
-				topHighlight.Position = UDim2.new(0.1 + relX * 0.2, 0, 0, 0);
-				topHighlight.Size = UDim2.new(0.6 + relX * 0.2, 0, 0, 1);
-				topHighlight.BackgroundTransparency = 0.5 + relY * 0.2;
-			end);
-		end;
-	end);
-	table.insert(self.GlassElements, {type="conn", value=reflectConn});
-
-	-- ===== 标题栏：iOS 导航栏风格 =====
-	TweenService:Create(self.TitleBar, TweenInfo.new(0.5), {
-		BackgroundColor3 = Color3.fromRGB(40, 40, 55),
-		BackgroundTransparency = 0.35
-	}):Play();
-
-	-- 标题栏底部：iOS 风格的细线分隔
-	for _, child in ipairs(self.TitleBar:GetChildren()) do
-		if child:IsA("Frame") and child.Name ~= "GlassInnerGlow" then
-			TweenService:Create(child, TweenInfo.new(0.5), {
-				BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-				BackgroundTransparency = 0.85
-			}):Play();
-		end;
-	end;
-
-	-- 标题文字：iOS 风格半透明白色
-	TweenService:Create(self.TitleLabel, TweenInfo.new(0.5), {
-		TextColor3 = Color3.fromRGB(255, 255, 255),
-		TextTransparency = 0.1
-	}):Play();
-
-	-- ===== 侧边栏：iOS Control Center 风格 =====
-	TweenService:Create(self.Sidebar, TweenInfo.new(0.5), {
-		BackgroundColor3 = Color3.fromRGB(35, 35, 50),
-		BackgroundTransparency = 0.4
-	}):Play();
-
-	-- 侧边栏分隔线
-	for _, child in ipairs(self.Sidebar:GetChildren()) do
-		if child:IsA("Frame") then
-			TweenService:Create(child, TweenInfo.new(0.5), {
-				BackgroundColor3 = Color3.fromRGB(255, 255, 255),
-				BackgroundTransparency = 0.88
-			}):Play();
-		end;
-	end;
-
-	-- ===== 标签按钮：iOS 圆形胶囊按钮风格 =====
-	for _, t in ipairs(self.Tabs) do
-		local isActive = (self.ActiveTab == t);
-
-		-- iOS 风格的磨砂玻璃按钮
-		TweenService:Create(t.Button, TweenInfo.new(0.4, Enum.EasingStyle.Quad), {
-			BackgroundColor3 = isActive and Color3.fromRGB(80, 160, 255) or Color3.fromRGB(50, 50, 70),
-			BackgroundTransparency = isActive and 0.25 or 0.4,
-			TextColor3 = Color3.fromRGB(255, 255, 255),
-			TextTransparency = isActive and 0 or 0.15
+		TweenService:Create(t.Button, TweenInfo.new(0.2), {
+			BackgroundColor3 = Color3.fromRGB(60, 60, 85),
+			BackgroundTransparency = 0.5,
+			TextColor3 = Color3.fromRGB(200, 200, 220)
 		}):Play();
-
-		-- 按钮内发光（iOS 按钮内部光泽）
-		local btnGlow = Instance.new("Frame");
-		btnGlow.Name = "GlassBtnGlow";
-		btnGlow.Size = UDim2.new(1, -4, 0.5, 0);
-		btnGlow.Position = UDim2.new(0, 2, 0, 1);
-		btnGlow.BackgroundColor3 = Color3.fromRGB(255, 255, 255);
-		btnGlow.BackgroundTransparency = 0.92;
-		btnGlow.BorderSizePixel = 0;
-		btnGlow.ZIndex = 7;
-		btnGlow.Parent = t.Button;
-		Instance.new("UICorner", btnGlow).CornerRadius = UDim.new(0, 7);
-		table.insert(self.GlassElements, btnGlow);
-
-		-- 更新 hover 效果
-		t.Button.MouseEnter:Connect(function()
-			if self.IsGlass and self.ActiveTab ~= t then
-				TweenService:Create(t.Button, TweenInfo.new(0.2), {
-					BackgroundColor3 = Color3.fromRGB(70, 70, 100),
-					BackgroundTransparency = 0.3
-				}):Play();
-				TweenService:Create(btnGlow, TweenInfo.new(0.2), {BackgroundTransparency=0.88}):Play();
-			end;
-		end);
-		t.Button.MouseLeave:Connect(function()
-			if self.IsGlass and self.ActiveTab ~= t then
-				TweenService:Create(t.Button, TweenInfo.new(0.2), {
-					BackgroundColor3 = Color3.fromRGB(50, 50, 70),
-					BackgroundTransparency = 0.4
-				}):Play();
-				TweenService:Create(btnGlow, TweenInfo.new(0.2), {BackgroundTransparency=0.92}):Play();
-			end;
-		end);
+		TweenService:Create(t.Glow, TweenInfo.new(0.2), {BackgroundTransparency=0.93}):Play();
 	end;
 
-	-- ===== 内容区域文字 =====
-	for _, lbl in ipairs(self.Content:GetDescendants()) do
-		if lbl:IsA("TextLabel") then
-			TweenService:Create(lbl, TweenInfo.new(0.4), {
-				TextColor3 = Color3.fromRGB(220, 220, 240),
-				TextTransparency = 0.05
-			}):Play();
-		end;
-	end;
-
-	-- ===== DNA 颜色调柔和 =====
-	self.DNA:SetColors(
-		Color3.fromRGB(80, 160, 255),
-		Color3.fromRGB(160, 120, 255),
-		Color3.fromRGB(180, 180, 220)
-	);
-
-	-- ===== 描边变柔和 =====
-	self.Border:SetThickness(2);
-end;
-
-function FH_cxh:_applyDarkTheme()
-	self.CurrentTheme = "dark";
-	self.IsGlass = false;
-
-	-- 移除模糊
-	if self.GlassBlur then
-		TweenService:Create(self.GlassBlur, TweenInfo.new(0.5), {Size=0}):Play();
-		task.delay(0.6, function()
-			if self.GlassBlur and self.GlassBlur.Parent then
-				self.GlassBlur:Destroy();
-			end;
-			self.GlassBlur = nil;
-		end);
-	end;
-
-	-- 移除所有玻璃元素
-	for _, elem in ipairs(self.GlassElements) do
-		pcall(function()
-			if type(elem) == "table" and elem.type == "conn" then
-				elem.value:Disconnect();
-			elseif typeof(elem) == "Instance" then
-				TweenService:Create(elem, TweenInfo.new(0.3), {BackgroundTransparency=1, ImageTransparency=1}):Play();
-				task.delay(0.4, function() elem:Destroy(); end);
-			end;
-		end);
-	end;
-	self.GlassElements = {};
-
-	-- 恢复深色
-	TweenService:Create(self.Window, TweenInfo.new(0.5), {
-		BackgroundColor3 = Color3.fromRGB(15, 15, 25),
-		BackgroundTransparency = 0.05
+	tab.Content.Visible = true;
+	TweenService:Create(tab.Button, TweenInfo.new(0.2), {
+		BackgroundColor3 = Color3.fromRGB(80, 160, 255),
+		BackgroundTransparency = 0.25,
+		TextColor3 = Color3.fromRGB(255, 255, 255)
 	}):Play();
-
-	TweenService:Create(self.TitleBar, TweenInfo.new(0.5), {
-		BackgroundColor3 = Color3.fromRGB(20, 20, 35),
-		BackgroundTransparency = 0.3
-	}):Play();
-
-	TweenService:Create(self.TitleLabel, TweenInfo.new(0.5), {
-		TextColor3 = self.Theme.Text,
-		TextTransparency = 0
-	}):Play();
-
-	-- 标题栏线
-	for _, child in ipairs(self.TitleBar:GetChildren()) do
-		if child:IsA("Frame") then
-			TweenService:Create(child, TweenInfo.new(0.5), {
-				BackgroundColor3 = Color3.fromRGB(80, 80, 120),
-				BackgroundTransparency = 0.5
-			}):Play();
-		end;
-	end;
-
-	TweenService:Create(self.Sidebar, TweenInfo.new(0.5), {
-		BackgroundColor3 = Color3.fromRGB(20, 20, 35),
-		BackgroundTransparency = 0.5
-	}):Play();
-
-	for _, child in ipairs(self.Sidebar:GetChildren()) do
-		if child:IsA("Frame") then
-			TweenService:Create(child, TweenInfo.new(0.5), {
-				BackgroundColor3 = Color3.fromRGB(80, 80, 120),
-				BackgroundTransparency = 0.5
-			}):Play();
-		end;
-	end;
-
-	-- 恢复标签
-	for _, t in ipairs(self.Tabs) do
-		-- 移除按钮光泽
-		for _, child in ipairs(t.Button:GetChildren()) do
-			if child.Name == "GlassBtnGlow" then
-				child:Destroy();
-			end;
-		end;
-
-		if self.ActiveTab == t then
-			TweenService:Create(t.Button, TweenInfo.new(0.3), {
-				BackgroundColor3 = self.Theme.Accent,
-				BackgroundTransparency = 0,
-				TextColor3 = Color3.fromRGB(255, 255, 255),
-				TextTransparency = 0
-			}):Play();
-		else
-			TweenService:Create(t.Button, TweenInfo.new(0.3), {
-				BackgroundColor3 = self.Theme.Card,
-				BackgroundTransparency = 0.3,
-				TextColor3 = self.Theme.TextDim,
-				TextTransparency = 0
-			}):Play();
-		end;
-	end;
-
-	-- 恢复文字
-	for _, lbl in ipairs(self.Content:GetDescendants()) do
-		if lbl:IsA("TextLabel") then
-			TweenService:Create(lbl, TweenInfo.new(0.3), {
-				TextColor3 = self.Theme.Text,
-				TextTransparency = 0
-			}):Play();
-		end;
-	end;
-
-	-- DNA 恢复
-	self.DNA:SetColors(
-		Color3.fromRGB(0, 200, 255),
-		Color3.fromRGB(255, 50, 200),
-		Color3.fromRGB(255, 255, 255)
-	);
-
-	self.Border:SetThickness(3);
+	TweenService:Create(tab.Glow, TweenInfo.new(0.2), {BackgroundTransparency=0.85}):Play();
+	self.ActiveTab = tab;
 end;
 
 -- ========== 销毁 ==========
 function FH_cxh:Destroy()
-	if self.DNA then self.DNA:Destroy(); end;
-	if self.Border then self.Border:Destroy(); end;
-	if self.GlassBlur and self.GlassBlur.Parent then self.GlassBlur:Destroy(); end;
-	for _, elem in ipairs(self.GlassElements) do
-		pcall(function()
-			if type(elem) == "table" and elem.type == "conn" then
-				elem.value:Disconnect();
-			elseif typeof(elem) == "Instance" then
-				elem:Destroy();
-			end;
-		end);
+	for _, conn in ipairs(self.Connections) do
+		conn:Disconnect();
 	end;
+	if self.DNA then self.DNA:Destroy(); end;
+	if self.GlassBlur and self.GlassBlur.Parent then self.GlassBlur:Destroy(); end;
 	if self.Gui then self.Gui:Destroy(); end;
 end;
 
